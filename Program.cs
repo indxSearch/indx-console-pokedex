@@ -25,7 +25,7 @@ namespace IndxConsoleApp
                     .Centered());
 
             // Dataset
-            var fileName = "pokedex";
+            var fileName = "pokedex_extended";
             // Locate file (adjust relative path if needed)
             string file = "data/" + fileName + ".json";
             if (!File.Exists(file))
@@ -156,6 +156,7 @@ namespace IndxConsoleApp
 
             Filter combinedFilters = null!;
             int docsBoosted = 0;
+            var boosts = new List<Boost>();
 
             // FILTER
             Filter origFilter = SearchEngine.CreateRangeFilter("pokedex_number", 1, 151)!;
@@ -163,9 +164,7 @@ namespace IndxConsoleApp
 
             // BOOST
             Filter legendaryFilter = SearchEngine.CreateValueFilter("is_legendary", true)!;
-            var legendaryBoost = new Boost[1];
-            legendaryBoost[0] = new Boost(legendaryFilter, BoostStrength.Med);
-            docsBoosted = SearchEngine.DefineBoost(legendaryBoost);
+            boosts.Add(SearchEngine.CreateBoost(legendaryFilter!, BoostStrength.Med));
 
             // 
             // WAIT FOR USER TO START SEARCHING
@@ -182,6 +181,8 @@ namespace IndxConsoleApp
             string text = string.Empty;
             int num = 5;
             var query = new JsonQuery(text, num);
+            query.Boosts = boosts.ToArray(); // immutable
+            docsBoosted = JsonQuery.DocumentsOfBoost(boosts);
 
             bool enableFilters = false;
             bool enableBoost = false;
@@ -452,7 +453,7 @@ namespace IndxConsoleApp
                                     $"Response time {latency:F3} ms (avg of {numReps} reps) filters ({enableFilters}) facets ({query.EnableFacets})\n" +
                                     $"Memory used: {memoryUsed} MB\n" +
                                     $"Document count: {SearchEngine.Status.DocumentCount}\n" +
-                                    $"Docs boosted: {(enableBoost ? docsBoosted : 0)}\n" +
+                                    $"Docs boosted: {query.DocumentsBoosted}\n" +
                                     $"Version: {SearchEngine.Status.Version}\n" +
                                     $"Valid License: {SearchEngine.Status.ValidLicense} / Expires {SearchEngine.Status.LicenseExpirationDate.ToShortDateString()}");
                                 performanceMeasured = true;
