@@ -190,6 +190,7 @@ namespace IndxConsoleApp
             bool printFacets = false;
             bool truncateList = true;
             bool sortList = false;
+            bool deepSearch = false;
             bool measurePerformance = false;
             bool performanceMeasured = false;
             int truncationIndex = 0;
@@ -260,6 +261,9 @@ namespace IndxConsoleApp
                                         if (sortField != null)
                                             sortList = !sortList;
                                         continue;
+                                    case ConsoleKey.D when keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift):
+                                        deepSearch = !deepSearch;
+                                        continue;
                                     case ConsoleKey.LeftArrow when printFacets:
                                         currentFacetPage = Math.Max(0, currentFacetPage - 1);
                                         continue;
@@ -291,9 +295,18 @@ namespace IndxConsoleApp
                         query.MaxNumberOfRecordsToReturn = num;
                         if (sortField != null)
                             query.SortBy = sortList ? sortField : null;
+                            query.SortAscending = false;
                         query.Filter = enableFilters ? combinedFilters! : null!;
                         if (docsBoosted > 0)
                             query.EnableBoost = enableBoost;
+                        if(deepSearch)
+                        {
+                            if(SearchEngine.Status.DocumentCount < 750000) 
+                                query.CoverageDepth = SearchEngine.Status.DocumentCount;
+                            else query.CoverageDepth = 7500000;
+                        } else query.CoverageDepth = 500;
+                        if(!truncateList) query.EnableCoverage = false;
+                        else query.EnableCoverage = true;
 
                         // Build search results table
                         var table = new Table();
@@ -307,12 +320,14 @@ namespace IndxConsoleApp
                         table.AddColumn("Classification");
                         table.AddColumn("Stats [Grey30](Attack, Health, Speed)[/]");
                         table.AddColumn("Score");
+                        
 
                         //
                         // SEARCH
                         //
 
                         var jsonResult = SearchEngine.Search(query);
+                        int minimumScore = 0;
                         truncationIndex = jsonResult.TruncationIndex;
 
                         if (jsonResult != null)
@@ -322,6 +337,9 @@ namespace IndxConsoleApp
                                 var key = jsonResult.Records[i].DocumentKey;
                                 var score = jsonResult.Records[i].Score;
                                 string json = SearchEngine.GetJsonDataOfKey(key);
+                                if (score < minimumScore)
+                                    break;
+
 
                                 var pokenum = JsonHelper.GetFieldValue(json, "pokedex_number");
                                 var name = JsonHelper.GetFieldValue(json, "name");
@@ -431,63 +449,78 @@ namespace IndxConsoleApp
                                 facetsMarkup = new Markup(facetText);
                             }
     
-
                             if (!allowEmptySearch)
                                 query.EnableFacets = false;
 
-                            // Additional info: hit count and, if enabled, performance measurements.
-                            Markup additionalInfo = new Markup($"\nExact hits: {truncationIndex + 1}\n");
+                            Markup additionalInfo = new Markup($"\nExact hits: {truncationIndex + 1} of {query.CoverageDepth} covered\n");
                             Markup performanceMeta = new Markup("");
                             if(printFacets) query.EnableFacets = true;
-                            if (measurePerformance)
-                            {
-                                int numReps = 100;
-                                if(!performanceMeasured || continuousMeasure)
-                                {
-                                    DateTime perfStart = DateTime.Now;
-                                    Parallel.For(1, numReps, i => { SearchEngine.Search(query); });
-                                    latency = (DateTime.Now - perfStart).TotalMilliseconds / numReps;
-                                    memoryUsed = GC.GetTotalMemory(false) / 1024 / 1024;
-                                }
-                                performanceMeta = new Markup(
-                                    $"Response time {latency:F3} ms (avg of {numReps} reps) filters ({enableFilters}) facets ({query.EnableFacets})\n" +
-                                    $"Memory used: {memoryUsed} MB\n" +
-                                    $"Document count: {SearchEngine.Status.DocumentCount}\n" +
-                                    $"Docs boosted: {query.DocumentsBoosted}\n" +
-                                    $"Version: {SearchEngine.Status.Version}\n" +
-                                    $"Valid License: {SearchEngine.Status.ValidLicense} / Expires {SearchEngine.Status.LicenseExpirationDate.ToShortDateString()}");
-                                performanceMeasured = true;
-                            } else performanceMeasured = false;
 
-                            var promptText = new Markup(
-                                "[cyan]Press [[UP/DOWN]] to change num, [[ESC]] to quit, [[C]] to clear, or type to continue searching.[/]\n"
-                            );
+
+                            var grid = new Grid();
+                            grid.AddColumn(new GridColumn());
+                            grid.AddColumn(new GridColumn());
+
+
                             var commands = new Table();
                             commands.Border(TableBorder.Rounded);
                             commands.BorderColor(Color.LightSlateBlue);
                             commands.AddColumn("Key");
                             commands.AddColumn("Command");
                             commands.AddColumn("Status");
-                            commands.AddRow("[grey]SHIFT-[/]T", "[grey]Truncation[/]", (truncateList ? "[cyan bold]Enabled[/]" : "Disabled"));
-                            commands.AddRow("[grey]SHIFT-[/]F", "[grey]Filters[/]", (enableFilters ? "[cyan bold]Enabled[/]" : "Disabled"));
-                            commands.AddRow("[grey]SHIFT-[/]P", "[grey]Print facets[/]", (printFacets  ? "[cyan bold]Enabled[/]" : "Disabled"));
-                            commands.AddRow("[grey]SHIFT-[/]B", "[grey]Boosting[/]", (enableBoost ? "[cyan bold]Enabled[/]" : "Disabled"));
-                            commands.AddRow("[grey]SHIFT-[/]E", "[grey]Empty search[/]", (allowEmptySearch ? "[cyan bold]Enabled[/]" : "Disabled"));
-                            commands.AddRow("[grey]SHIFT-[/]M", "[grey]Measure performance[/]", (measurePerformance ? "[cyan bold]Enabled[/]" : "Disabled"));
-                            commands.AddRow("[grey]SHIFT-[/]S", "[grey]Sorting[/]", (sortList ? "[cyan bold]Enabled[/]" : "Disabled"));
+                            commands.AddRow("[grey]SHIFT-[/]T", "[grey]Truncation[/]", truncateList ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+                            commands.AddRow("[grey]SHIFT-[/]F", "[grey]Filters[/]", enableFilters ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+                            commands.AddRow("[grey]SHIFT-[/]P", "[grey]Print facets[/]", printFacets ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+                            commands.AddRow("[grey]SHIFT-[/]B", "[grey]Boosting[/]", enableBoost ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+                            commands.AddRow("[grey]SHIFT-[/]E", "[grey]Empty search[/]", allowEmptySearch ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+                            commands.AddRow("[grey]SHIFT-[/]M", "[grey]Measure performance[/]", measurePerformance ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+                            commands.AddRow("[grey]SHIFT-[/]S", "[grey]Sorting[/]", sortList ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+                            commands.AddRow("[grey]SHIFT-[/]D", "[grey]Deep search[/]", deepSearch ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+
+                            
+                            IRenderable performanceRenderable;
+                            if (measurePerformance)
+                            {
+                                int numReps = 100;
+                                if (!performanceMeasured || continuousMeasure)
+                                {
+                                    DateTime perfStart = DateTime.Now;
+                                    Parallel.For(1, numReps, i => { SearchEngine.Search(query); });
+                                    latency = (DateTime.Now - perfStart).TotalMilliseconds / numReps;
+                                    memoryUsed = GC.GetTotalMemory(false) / 1024 / 1024;
+                                }
+                                var performanceTable = new Table();
+                                performanceTable.Border(TableBorder.Rounded);
+                                performanceTable.BorderColor(Color.Grey70);
+                                performanceTable.AddColumn("Performance");
+                                performanceTable.AddRow($"[grey]Response time:[/] {latency:F3} ms (avg of {numReps} reps)");
+                                performanceTable.AddRow($"[grey]Memory used:[/] {memoryUsed} MB");
+                                performanceTable.AddRow($"[grey]Document count:[/] {SearchEngine.Status.DocumentCount}");
+                                performanceTable.AddRow($"[grey]Docs boosted:[/] {query.DocumentsBoosted}");
+                                performanceTable.AddRow($"[grey]Version:[/] {SearchEngine.Status.Version}");
+                                performanceTable.AddRow($"[grey]Valid License:[/] {SearchEngine.Status.ValidLicense} / Expires {SearchEngine.Status.LicenseExpirationDate.ToShortDateString()}");
+                                performanceRenderable = performanceTable;
+                                performanceMeasured = true;
+                            }
+                            else
+                            {
+                                performanceRenderable = new Markup(""); // empty renderable when not measuring.
+                                performanceMeasured = false;
+                            }
+
+                            grid.AddRow(commands, performanceRenderable); // left+right panel
 
                             renderables.Add(facetsMarkup);
                             renderables.Add(additionalInfo);
-                            if(measurePerformance) renderables.Add(performanceMeta);
-                            renderables.Add(promptText);
-                            renderables.Add(commands);
-                        }
+                            renderables.Add(new Markup("[cyan]Press [[UP/DOWN]] to change num, [[ESC]] to quit, [[C]] to clear, or type to continue searching.[/]\n"));
+                            renderables.Add(grid);
+                        } // end 2s idle
 
-                        // Combine renderables in a vertical stack
-                        var renderStack = new Rows(renderables);
+                        var renderStack = new Rows(renderables); // combine renderables
                         ctx.UpdateTarget(renderStack);
                     } // end context
                 }); // end Live view
+                Thread.Sleep(50); // necessary for live view?
         } // end Main
 
         /// Prints detected JSON fields
