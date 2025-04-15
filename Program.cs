@@ -18,7 +18,7 @@ namespace IndxConsoleApp
 
             // Create search engine instance
             var SearchEngine = new SearchEngineJson();
-            // add a license file by doing new SearchEngineJson("file.license");
+            // Load a license like this: new SearchEngineJson("file.license");
             // Get a developer license on https://indx.co
 
             // Display header
