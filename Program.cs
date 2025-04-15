@@ -17,13 +17,13 @@ namespace IndxConsoleApp
             // 
 
             // Create search engine instance
-            var SearchEngine = new SearchEngineJson();
+            var engine = new SearchEngineJson();
             // Load a license like this: new SearchEngineJson("file.license");
             // Get a developer license on https://indx.co
 
             // Display header
             AnsiConsole.Write(
-                new FigletText("indx " + new Version(SearchEngine.Status.Version).ToString(2))
+                new FigletText("indx " + new Version(engine.Status.Version).ToString(2))
                     .Centered());
 
             // Dataset
@@ -37,7 +37,7 @@ namespace IndxConsoleApp
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
 
-            // Stream data from file and initialize SearchEngine
+            // Stream data from file and initialize engine
             using (FileStream fstream = File.Open(file, FileMode.Open, FileAccess.Read))
             {
                 AnsiConsole.Status()
@@ -46,12 +46,12 @@ namespace IndxConsoleApp
                     .Start($"Analyzing JSON", ctx =>
                     {
                         // Perform your loading operation.
-                        SearchEngine.Init(fstream, out string _errorMessage);
+                        engine.Init(fstream, out string _errorMessage);
                     });
             }
-            if (SearchEngine.DocumentFields == null)
+            if (engine.DocumentFields == null)
                 return;
-            PrintFields(false, SearchEngine.DocumentFields);
+            PrintFields(false, engine.DocumentFields);
 
             // 
             // CONFIGURE FIELDS
@@ -59,33 +59,33 @@ namespace IndxConsoleApp
 
             Field sortField = null!;
 
-            SearchEngine.GetField("pokedex_number")!.Indexable = true;
-            SearchEngine.GetField("pokedex_number")!.Weight = Weight.High;
-            SearchEngine.GetField("pokedex_number")!.Filterable = true;
+            engine.GetField("pokedex_number")!.Indexable = true;
+            engine.GetField("pokedex_number")!.Weight = Weight.High;
+            engine.GetField("pokedex_number")!.Filterable = true;
 
-            SearchEngine.GetField("name")!.Indexable = true;
-            SearchEngine.GetField("name")!.Weight = Weight.High;
+            engine.GetField("name")!.Indexable = true;
+            engine.GetField("name")!.Weight = Weight.High;
 
-            SearchEngine.GetField("type1")!.Indexable = true;
-            SearchEngine.GetField("type1")!.Weight = Weight.Low;
-            SearchEngine.GetField("type1")!.Facetable = true;
+            engine.GetField("type1")!.Indexable = true;
+            engine.GetField("type1")!.Weight = Weight.Low;
+            engine.GetField("type1")!.Facetable = true;
 
-            SearchEngine.GetField("type2")!.Indexable = true;
-            SearchEngine.GetField("type2")!.Weight = Weight.Low;
-            SearchEngine.GetField("type2")!.Facetable = true;
+            engine.GetField("type2")!.Indexable = true;
+            engine.GetField("type2")!.Weight = Weight.Low;
+            engine.GetField("type2")!.Facetable = true;
 
-            SearchEngine.GetField("classfication")!.Indexable = true;
-            SearchEngine.GetField("classfication")!.Weight = Weight.Low;
-            SearchEngine.GetField("classfication")!.Facetable = true;
+            engine.GetField("classfication")!.Indexable = true;
+            engine.GetField("classfication")!.Weight = Weight.Low;
+            engine.GetField("classfication")!.Facetable = true;
 
-            SearchEngine.GetField("is_legendary")!.Facetable = true;
-            SearchEngine.GetField("is_legendary")!.Filterable = true;
+            engine.GetField("is_legendary")!.Facetable = true;
+            engine.GetField("is_legendary")!.Filterable = true;
 
-            SearchEngine.GetField("attack")!.Sortable = true;
+            engine.GetField("attack")!.Sortable = true;
 
-            SearchEngine.GetField("abilities")!.Facetable = true;
+            engine.GetField("abilities")!.Facetable = true;
 
-            sortField = SearchEngine.GetField("attack")!;
+            sortField = engine.GetField("attack")!;
 
 
             // 
@@ -101,7 +101,7 @@ namespace IndxConsoleApp
                     .Start($"Loading {file}", ctx =>
                     {
                         // Perform your loading operation.
-                        SearchEngine.LoadJson(fstream, out _);
+                        engine.LoadJson(fstream, out _);
                     });
                 double loadTime = (DateTime.Now - loadStart).TotalMilliseconds;
                 AnsiConsole.Markup($"\nLoading {file} completed in {(int)loadTime / 1000.0:F1} seconds\n");
@@ -111,7 +111,7 @@ namespace IndxConsoleApp
             // INDEXING
             // 
 
-            if (!SearchEngine.Index())
+            if (!engine.Index())
             {
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine("Error: No fields marked as indexable");
@@ -119,7 +119,7 @@ namespace IndxConsoleApp
             }
             else
             {
-                SearchEngine.Index();
+                engine.Index();
             }
 
             DateTime indexStart = DateTime.Now;
@@ -138,9 +138,9 @@ namespace IndxConsoleApp
                 {
                     var task = ctx.AddTask("Indexing", autoStart: false);
                     task.StartTask();
-                    while (SearchEngine.Status.SystemState != SystemState.Ready)
+                    while (engine.Status.SystemState != SystemState.Ready)
                     {
-                        task.Value = SearchEngine.Status.IndexProgressPercent;
+                        task.Value = engine.Status.IndexProgressPercent;
                         Thread.Sleep(50);
                     }
                     task.Value = 100;
@@ -149,7 +149,7 @@ namespace IndxConsoleApp
 
             indexTime = (DateTime.Now - indexStart).TotalMilliseconds;
             Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"🟢 Indexed '{file}' ({SearchEngine.Status.DocumentCount} documents) and ready to search in {indexTime / 1000.0:F1} seconds\n");
+            Console.WriteLine($"🟢 Indexed '{file}' ({engine.Status.DocumentCount} documents) and ready to search in {indexTime / 1000.0:F1} seconds\n");
             Console.ResetColor();
 
             // 
@@ -161,12 +161,12 @@ namespace IndxConsoleApp
             var boosts = new List<Boost>();
 
             // FILTER
-            Filter origFilter = SearchEngine.CreateRangeFilter("pokedex_number", 1, 151)!;
+            Filter origFilter = engine.CreateRangeFilter("pokedex_number", 1, 151)!;
             combinedFilters = origFilter; // could combine additional filters here with & operator
 
             // BOOST
-            Filter legendaryFilter = SearchEngine.CreateValueFilter("is_legendary", true)!;
-            boosts.Add(SearchEngine.CreateBoost(legendaryFilter!, BoostStrength.Med));
+            Filter legendaryFilter = engine.CreateValueFilter("is_legendary", true)!;
+            boosts.Add(engine.CreateBoost(legendaryFilter!, BoostStrength.Med));
 
             // 
             // WAIT FOR USER TO START SEARCHING
@@ -307,8 +307,8 @@ namespace IndxConsoleApp
                             query.EnableBoost = enableBoost;
                         if(deepSearch)
                         {
-                            if(SearchEngine.Status.DocumentCount < 750000) 
-                                query.CoverageDepth = SearchEngine.Status.DocumentCount;
+                            if(engine.Status.DocumentCount < 750000) 
+                                query.CoverageDepth = engine.Status.DocumentCount;
                             else query.CoverageDepth = 7500000;
                         } else query.CoverageDepth = 500;
                         if(!truncateList) query.EnableCoverage = false;
@@ -332,7 +332,7 @@ namespace IndxConsoleApp
                         // SEARCH
                         //
 
-                        var jsonResult = SearchEngine.Search(query);
+                        var jsonResult = engine.Search(query);
                         truncationIndex = jsonResult.TruncationIndex;
 
                         if (jsonResult != null)
@@ -341,7 +341,7 @@ namespace IndxConsoleApp
                             {
                                 var key = jsonResult.Records[i].DocumentKey;
                                 var score = jsonResult.Records[i].Score;
-                                string json = SearchEngine.GetJsonDataOfKey(key);
+                                string json = engine.GetJsonDataOfKey(key);
 
                                 var pokenum = JsonHelper.GetFieldValue(json, "pokedex_number");
                                 var name = JsonHelper.GetFieldValue(json, "name");
@@ -409,14 +409,14 @@ namespace IndxConsoleApp
                         if ((DateTime.Now - lastInputTime).TotalSeconds >= 2 && (text.Length > 0 || allowEmptySearch))
                         {
                             query.EnableFacets = true;
-                            var facetResult = SearchEngine.Search(query);
+                            var facetResult = engine.Search(query);
                             Dictionary<string, KeyValuePair<string, int>[]>? facets = facetResult.Facets;
                             Markup facetsMarkup = new Markup("");
                             if (printFacets && facets != null)
                             {
                                 // Build a compact string for each facet group.
                                 var facetGroups = new List<string>();
-                                foreach (var field in SearchEngine.DocumentFields.GetFacetableFieldList())
+                                foreach (var field in engine.DocumentFields.GetFacetableFieldList())
                                 {
                                     var fName = field.Name;
                                     var sb = new StringBuilder();
@@ -489,7 +489,7 @@ namespace IndxConsoleApp
                                 if (!performanceMeasured || continuousMeasure)
                                 {
                                     DateTime perfStart = DateTime.Now;
-                                    Parallel.For(1, numReps, i => { SearchEngine.Search(query); });
+                                    Parallel.For(1, numReps, i => { engine.Search(query); });
                                     latency = (DateTime.Now - perfStart).TotalMilliseconds / numReps;
                                     memoryUsed = GC.GetTotalMemory(false) / 1024 / 1024;
                                 }
@@ -499,10 +499,10 @@ namespace IndxConsoleApp
                                 performanceTable.AddColumn("Performance");
                                 performanceTable.AddRow($"[grey]Response time:[/] {latency:F3} ms (avg of {numReps} reps)");
                                 performanceTable.AddRow($"[grey]Memory used:[/] {memoryUsed} MB");
-                                performanceTable.AddRow($"[grey]Document count:[/] {SearchEngine.Status.DocumentCount} / {SearchEngine.Status.LicenseInfo.DocumentLimit}");
+                                performanceTable.AddRow($"[grey]Document count:[/] {engine.Status.DocumentCount} / {engine.Status.LicenseInfo.DocumentLimit}");
                                 performanceTable.AddRow($"[grey]Docs boosted:[/] {query.DocumentsBoosted}");
-                                performanceTable.AddRow($"[grey]Version:[/] {SearchEngine.Status.Version}");
-                                performanceTable.AddRow($"[grey]Valid License:[/] {SearchEngine.Status.LicenseInfo.ValidLicense}");
+                                performanceTable.AddRow($"[grey]Version:[/] {engine.Status.Version}");
+                                performanceTable.AddRow($"[grey]Valid License:[/] {engine.Status.LicenseInfo.ValidLicense}");
                                 performanceRenderable = performanceTable;
                                 performanceMeasured = true;
                             }
@@ -519,15 +519,15 @@ namespace IndxConsoleApp
                                 licenseTable.Border(TableBorder.Rounded);
                                 licenseTable.BorderColor(Color.Grey70);
                                 licenseTable.AddColumn("License information");
-                                licenseTable.AddRow($"[grey]Licensed to:[/] {SearchEngine.Status.LicenseInfo.LicensedTo}");
-                                if(SearchEngine.Status.LicenseInfo.Licensed)
+                                licenseTable.AddRow($"[grey]Licensed to:[/] {engine.Status.LicenseInfo.LicensedTo}");
+                                if(engine.Status.LicenseInfo.Licensed)
                                 {
-                                    licenseTable.AddRow($"[grey]Type:[/] {SearchEngine.Status.LicenseInfo.Type}");
-                                    licenseTable.AddRow($"[grey]Description:[/] {SearchEngine.Status.LicenseInfo.Description}");
-                                    licenseTable.AddRow($"[grey]Document limit:[/] {SearchEngine.Status.LicenseInfo.DocumentLimit}");
-                                    licenseTable.AddRow($"[grey]Limit exceeded:[/] {SearchEngine.Status.LicenseInfo.DocumentLimitExceeded}");
-                                    licenseTable.AddRow($"[grey]Valid License:[/] {SearchEngine.Status.LicenseInfo.ValidLicense}");
-                                    licenseTable.AddRow($"[grey]Expires:[/] {SearchEngine.Status.LicenseInfo.ExpirationDate}");
+                                    licenseTable.AddRow($"[grey]Type:[/] {engine.Status.LicenseInfo.Type}");
+                                    licenseTable.AddRow($"[grey]Description:[/] {engine.Status.LicenseInfo.Description}");
+                                    licenseTable.AddRow($"[grey]Document limit:[/] {engine.Status.LicenseInfo.DocumentLimit}");
+                                    licenseTable.AddRow($"[grey]Limit exceeded:[/] {engine.Status.LicenseInfo.DocumentLimitExceeded}");
+                                    licenseTable.AddRow($"[grey]Valid License:[/] {engine.Status.LicenseInfo.ValidLicense}");
+                                    licenseTable.AddRow($"[grey]Expires:[/] {engine.Status.LicenseInfo.ExpirationDate}");
                                 }
                                 licenseRenderable = licenseTable;
                             }
