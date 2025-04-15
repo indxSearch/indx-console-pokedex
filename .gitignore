@@ -6,6 +6,7 @@
 *.user
 *.sln.docstates
 indx.license
+indx-developer.license
 Indx.dll
 
 # Build results
