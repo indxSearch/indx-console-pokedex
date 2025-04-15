@@ -18,6 +18,8 @@ namespace IndxConsoleApp
 
             // Create search engine instance
             var SearchEngine = new SearchEngineJson();
+            // add a license file by doing new SearchEngineJson("file.license");
+            // Get a developer license on https://indx.co
 
             // Display header
             AnsiConsole.Write(
@@ -193,6 +195,7 @@ namespace IndxConsoleApp
             bool deepSearch = false;
             bool measurePerformance = false;
             bool performanceMeasured = false;
+            bool showLicenseInfo = false;
             int truncationIndex = 0;
             double latency = 0.0;
             long memoryUsed = 0;
@@ -256,6 +259,9 @@ namespace IndxConsoleApp
                                         continue;
                                     case ConsoleKey.M when keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift):
                                         measurePerformance = !measurePerformance;
+                                        continue;
+                                    case ConsoleKey.L when keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift):
+                                        showLicenseInfo = !showLicenseInfo;
                                         continue;
                                     case ConsoleKey.S when keyInfo.Modifiers.HasFlag(ConsoleModifiers.Shift):
                                         if (sortField != null)
@@ -327,7 +333,6 @@ namespace IndxConsoleApp
                         //
 
                         var jsonResult = SearchEngine.Search(query);
-                        int minimumScore = 0;
                         truncationIndex = jsonResult.TruncationIndex;
 
                         if (jsonResult != null)
@@ -337,9 +342,6 @@ namespace IndxConsoleApp
                                 var key = jsonResult.Records[i].DocumentKey;
                                 var score = jsonResult.Records[i].Score;
                                 string json = SearchEngine.GetJsonDataOfKey(key);
-                                if (score < minimumScore)
-                                    break;
-
 
                                 var pokenum = JsonHelper.GetFieldValue(json, "pokedex_number");
                                 var name = JsonHelper.GetFieldValue(json, "name");
@@ -460,6 +462,7 @@ namespace IndxConsoleApp
                             var grid = new Grid();
                             grid.AddColumn(new GridColumn());
                             grid.AddColumn(new GridColumn());
+                            grid.AddColumn(new GridColumn());
 
 
                             var commands = new Table();
@@ -476,6 +479,7 @@ namespace IndxConsoleApp
                             commands.AddRow("[grey]SHIFT-[/]M", "[grey]Measure performance[/]", measurePerformance ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
                             commands.AddRow("[grey]SHIFT-[/]S", "[grey]Sorting[/]", sortList ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
                             commands.AddRow("[grey]SHIFT-[/]D", "[grey]Deep search[/]", deepSearch ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
+                            commands.AddRow("[grey]SHIFT-[/]L", "[grey]Show license info[/]", showLicenseInfo ? "[cyan][[x]] Enabled[/]" : "[[ ]] Disabled");
 
                             
                             IRenderable performanceRenderable;
@@ -495,10 +499,10 @@ namespace IndxConsoleApp
                                 performanceTable.AddColumn("Performance");
                                 performanceTable.AddRow($"[grey]Response time:[/] {latency:F3} ms (avg of {numReps} reps)");
                                 performanceTable.AddRow($"[grey]Memory used:[/] {memoryUsed} MB");
-                                performanceTable.AddRow($"[grey]Document count:[/] {SearchEngine.Status.DocumentCount}");
+                                performanceTable.AddRow($"[grey]Document count:[/] {SearchEngine.Status.DocumentCount} / {SearchEngine.Status.LicenseInfo.DocumentLimit}");
                                 performanceTable.AddRow($"[grey]Docs boosted:[/] {query.DocumentsBoosted}");
                                 performanceTable.AddRow($"[grey]Version:[/] {SearchEngine.Status.Version}");
-                                performanceTable.AddRow($"[grey]Valid License:[/] {SearchEngine.Status.ValidLicense} / Expires {SearchEngine.Status.LicenseExpirationDate.ToShortDateString()}");
+                                performanceTable.AddRow($"[grey]Valid License:[/] {SearchEngine.Status.LicenseInfo.ValidLicense}");
                                 performanceRenderable = performanceTable;
                                 performanceMeasured = true;
                             }
@@ -508,7 +512,31 @@ namespace IndxConsoleApp
                                 performanceMeasured = false;
                             }
 
-                            grid.AddRow(commands, performanceRenderable); // left+right panel
+                            IRenderable licenseRenderable;
+                            if (showLicenseInfo)
+                            {
+                                var licenseTable = new Table();
+                                licenseTable.Border(TableBorder.Rounded);
+                                licenseTable.BorderColor(Color.Grey70);
+                                licenseTable.AddColumn("License information");
+                                licenseTable.AddRow($"[grey]Licensed to:[/] {SearchEngine.Status.LicenseInfo.LicensedTo}");
+                                if(SearchEngine.Status.LicenseInfo.Licensed)
+                                {
+                                    licenseTable.AddRow($"[grey]Type:[/] {SearchEngine.Status.LicenseInfo.Type}");
+                                    licenseTable.AddRow($"[grey]Description:[/] {SearchEngine.Status.LicenseInfo.Description}");
+                                    licenseTable.AddRow($"[grey]Document limit:[/] {SearchEngine.Status.LicenseInfo.DocumentLimit}");
+                                    licenseTable.AddRow($"[grey]Limit exceeded:[/] {SearchEngine.Status.LicenseInfo.DocumentLimitExceeded}");
+                                    licenseTable.AddRow($"[grey]Valid License:[/] {SearchEngine.Status.LicenseInfo.ValidLicense}");
+                                    licenseTable.AddRow($"[grey]Expires:[/] {SearchEngine.Status.LicenseInfo.ExpirationDate}");
+                                }
+                                licenseRenderable = licenseTable;
+                            }
+                            else
+                            {
+                                licenseRenderable = new Markup("");
+                            }
+
+                            grid.AddRow(commands, performanceRenderable, licenseRenderable); // left -> right panel
 
                             renderables.Add(facetsMarkup);
                             renderables.Add(additionalInfo);
